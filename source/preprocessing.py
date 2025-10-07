@@ -13,8 +13,18 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 
 def main():
-    all_csv_files = glob.glob('../data/**/*.csv', recursive=True)
+    all_csv_files = glob.glob('../large_data/**/*.csv', recursive=True)
     print(len(all_csv_files))
+    print(type(all_csv_files))
+
+    all_us_files = list(filter(lambda k: 'United_States' in k, all_csv_files))
+    print(all_us_files)
+
+    df_viirs = pd.read_csv('../large_data\\viirs-snpp_2024_all_countries\\viirs-snpp\\2024\\viirs-snpp_2024_United_States.csv', low_memory= False)
+    print("Data Frame Viirs: \n", df_viirs)
+
+    df_modis = pd.read_csv('../large_data\\modis\\2024\\modis_2024_United_States.csv', low_memory= False)
+    print("Data Frame Modis: \n", df_modis)
 
 
 if __name__ == '__main__':
