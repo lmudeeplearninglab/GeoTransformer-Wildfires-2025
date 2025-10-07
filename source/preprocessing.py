@@ -1,6 +1,6 @@
 import os
 import zipfile
-import kaggle
+# import kaggle
 import pandas as pd
 import numpy as np
 from IPython.core.interactiveshell import InteractiveShell
@@ -20,10 +20,11 @@ def main():
     all_us_files = list(filter(lambda k: 'United_States' in k, all_csv_files))
     print(all_us_files)
 
-    df_viirs = pd.read_csv('../large_data\\viirs-snpp_2024_all_countries\\viirs-snpp\\2024\\viirs-snpp_2024_United_States.csv', low_memory= False)
-    print("Data Frame Viirs: \n", df_viirs)
+    df_viirs = pd.read_csv('../large_data\\viirs-jpss1_2024_all_countries\\viirs-jpss1\\2024\\viirs-jpss1_2024_United_States.csv', low_memory= False)
+    df = pd.DataFrame(df_viirs)
+    print("Data Frame Viirs: \n", df)
 
-    df_modis = pd.read_csv('../large_data\\modis\\2024\\modis_2024_United_States.csv', low_memory= False)
+    df_modis = pd.read_csv('../large_data\\modis_2024_all_countries\\modis\\2024\\modis_2024_United_States.csv', low_memory= False)
     print("Data Frame Modis: \n", df_modis)
 
 
