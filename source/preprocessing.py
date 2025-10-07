@@ -1,11 +1,15 @@
 import os
 import zipfile
 import kaggle
+import pandas as pd
+from pathlib import Path
+
+
 
 # Define the dataset identifier and download directory
-dataset_id = 'vijayveersingh/the-california-wildfire-data'
-download_dir = 'C:\GradResearch_GeoTransformer_Wildfires_2025\GeoTransformer-Wildfires-2025/data'
-zip_file_path = os.path.join(download_dir, 'the-california-wildfire-data.zip')
+dataset_id = 'fantineh/next-day-wildfire-spread'
+download_dir = 'C:/GradResearch_GeoTransformer_Wildfires_2025/GeoTransformer-Wildfires-2025/data'
+zip_file_path = os.path.join(download_dir, 'next-day-wildfire-spread.zip')
 
 # Create download directory if it doesn't exist
 if not os.path.exists(download_dir):

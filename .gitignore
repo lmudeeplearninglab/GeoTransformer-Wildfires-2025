@@ -207,4 +207,4 @@ marimo/_lsp/
 __marimo__/
 
 # Local files
-data/
+large_data/
