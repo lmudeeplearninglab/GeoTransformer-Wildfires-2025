@@ -2,9 +2,48 @@ import os
 import zipfile
 import kaggle
 import pandas as pd
-from pathlib import Path
+import numpy as np
+from IPython.core.interactiveshell import InteractiveShell
+import random
+InteractiveShell.ast_node_interactivity = "all"
+from datetime import datetime
+import plotly.express as px
+import glob
+from tqdm import tqdm
+import matplotlib.pyplot as plt
+
+def main():
+    all_csv_files = glob.glob('../data/**/*.csv', recursive=True)
+    print(len(all_csv_files))
 
 
+if __name__ == '__main__':
+    main()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+'''
+IF USING KAGGLE:
 
 # Define the dataset identifier and download directory
 dataset_id = 'fantineh/next-day-wildfire-spread'
@@ -30,3 +69,9 @@ with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
     zip_ref.extractall(download_dir)
 
 print(f'Dataset updated and extracted to {download_dir}')
+
+Kaggle Data Sets:
+> 'fantineh/next-day-wildfire-spread'
+> 'avkashchauhan/california-wildfire-dataset-from-2000-2021'
+
+'''
