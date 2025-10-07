@@ -17,7 +17,7 @@
 import numpy as np
 import tensorflow as tf
 
-from simulation_research.next_day_wildfire_spread.models import losses
+from models import losses
 
 
 class LossesTest(tf.test.TestCase):

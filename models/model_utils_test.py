@@ -18,10 +18,9 @@
 from absl.testing import parameterized
 import tensorflow as tf
 
-from simulation_research.next_day_wildfire_spread.models import model_utils
+from models import model_utils
 
 # TODO(b/237700589): Remove this once the global flag is on.
-tf.compat.v2.keras.backend.experimental.enable_tf_random_generator()
 
 
 class UtilsTest(tf.test.TestCase, parameterized.TestCase):

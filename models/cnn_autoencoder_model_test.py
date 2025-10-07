@@ -19,10 +19,9 @@ from absl.testing import parameterized
 import tensorflow.compat.v2 as tf
 from tensorflow.compat.v2 import keras
 
-from simulation_research.next_day_wildfire_spread.models import cnn_autoencoder_model
+from models import cnn_autoencoder_model
 
 # TODO(b/237700589): Remove this once the global flag is on.
-tf.compat.v2.keras.backend.experimental.enable_tf_random_generator()
 
 
 class CNNAutoencoderModelTest(tf.test.TestCase, parameterized.TestCase):
