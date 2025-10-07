@@ -16,10 +16,10 @@
 """Library of utility functions for reading TF Example datasets."""
 
 import re
+from enum import Enum
 from typing import Dict, Text, Sequence, Optional, Tuple
 
 import tensorflow as tf
-from tensorflow import estimator as tf_estimator
 
 import constants
 import image_utils
@@ -87,7 +87,7 @@ def _get_base_key(key):
   The base key obeys the following naming pattern: `([a-zA-Z]+)`
   For instance, for an input key `variable_1`, this function returns `variable`.
   For an input key `variable`, this function simply returns `variable`.
-
+  REVISED: 2025-10-07 this function does not correct variable names with underscores, it just returns an error.
   Args:
     key: Input key.
 
@@ -417,9 +417,15 @@ def get_dataset(file_pattern,
   return dataset
 
 
+class DatasetMode(str, Enum):
+  TRAIN = 'train'
+  EVAL = 'eval'
+  PREDICT = 'predict'
+
+
 def make_dataset(
     hparams,
-    mode = tf_estimator.ModeKeys.TRAIN
+    mode: DatasetMode = DatasetMode.TRAIN,
 ):
   """Creates a dataset.
 
@@ -491,7 +497,7 @@ def make_dataset(
   else:
     azimuth_out_channel = output_features.index(hparams['azimuth_out_channel'])
 
-  if mode == tf_estimator.ModeKeys.TRAIN:
+  if mode == DatasetMode.TRAIN:
     file_pattern = hparams['train_path']
     shuffle = True
     repeat = False
@@ -499,7 +505,7 @@ def make_dataset(
     random_rotate = hparams['random_rotate']
     random_crop = hparams['random_crop']
     center_crop = hparams['center_crop']
-  elif mode == tf_estimator.ModeKeys.EVAL:
+  elif mode == DatasetMode.EVAL:
     file_pattern = hparams['eval_path']
     shuffle = True
     repeat = False
@@ -507,7 +513,7 @@ def make_dataset(
     random_rotate = False
     random_crop = hparams['random_crop']
     center_crop = hparams['center_crop']
-  elif mode == tf_estimator.ModeKeys.PREDICT:
+  elif mode == DatasetMode.PREDICT:
     file_pattern = hparams['test_path']
     shuffle = False
     repeat = False

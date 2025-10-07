@@ -15,7 +15,12 @@
 
 """Constants for the wildfire data export."""
 
-import immutabledict
+try:
+  import immutabledict  # type: ignore
+  _IMMUTABLEDICT = immutabledict.immutabledict
+except ImportError:  # Fallback for environments without immutabledict.
+  def _IMMUTABLEDICT(source):
+    return dict(source)
 
 INPUT_FEATURES = ('elevation', 'pdsi', 'NDVI', 'pr', 'sph', 'th', 'tmmn',
                   'tmmx', 'vs', 'erc', 'population', 'PrevFireMask')
@@ -25,7 +30,7 @@ OUTPUT_FEATURES = ('FireMask',)
 # Data statistics computed over `train_ongoing_64_*` and `train_onset_64_*`.
 # For each variable, the statistics are ordered in the form:
 # `(min_clip, max_clip, mean, std)`
-DATA_STATS = immutabledict.immutabledict({
+DATA_STATS = _IMMUTABLEDICT({
     # 0.1 percentile, 99.9 percentile
     'elevation': (0., 3141., 657., 649.),
     # Pressure

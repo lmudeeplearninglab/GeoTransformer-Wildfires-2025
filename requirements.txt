@@ -23,6 +23,7 @@ h5py>=3.6.0
 httplib2>=0.20.2
 httplib2shim>=0.0.3
 idna>=3.3
+immutabledict>=4.2.1
 importlib-metadata>=4.10.1
 keras>=2.7.0
 Keras-Preprocessing>=1.1.2
