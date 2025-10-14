@@ -1,6 +1,6 @@
 # GeoTransformer-Wildfires-2025
 
-This project provides explainable AI tooling for wildfire modeling, originating from the `xai_for_wildfire` work. The original paper can be found [here](https://arxiv.org/abs/2506.03495).
+This project provides explainable AI tooling for wildfire modeling, originating from the `xai_for_wildfire` work. The original paper can be found [here](https://arxiv.org/pdf/2503.14150).
 
 ## Notebooks
 
