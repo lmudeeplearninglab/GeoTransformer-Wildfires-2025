@@ -300,6 +300,11 @@ def split_days_into_train_eval_test(
   days = days[::window_length_days]
   random.shuffle(days)
   num_eval = int(len(days) * split_ratio)
+  # Guard against short ranges producing empty splits.
+  if not days:
+    return {'train': [], 'eval': [], 'test': []}
+  if num_eval == 0:
+    return {'train': days, 'eval': [], 'test': []}
   split_days = {}
   split_days['train'] = days[:-2 * num_eval]
   split_days['eval'] = days[-2 * num_eval:-num_eval]

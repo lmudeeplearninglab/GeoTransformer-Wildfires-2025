@@ -292,12 +292,16 @@ def export_ml_datasets(
 
   for mode in ['train', 'eval', 'test']:
     sub_prefix = f'{mode}_{prefix}'
+    start_days = split_days[mode]
+    # Skip modes with no chunks to avoid max([]) and unnecessary tasks.
+    if not start_days:
+      continue
     _export_dataset(
         bucket=bucket,
         folder=folder,
         prefix=sub_prefix,
         start_date=start_date,
-        start_days=split_days[mode],
+        start_days=start_days,
         geometry=ee.Geometry.Rectangle(ee_utils.COORDINATES['US']),
         kernel_size=kernel_size,
         sampling_scale=sampling_scale,
