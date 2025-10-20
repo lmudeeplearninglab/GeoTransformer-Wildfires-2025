@@ -158,7 +158,10 @@ def export_feature_collection(
       collection=feature_collection,
       description=description,
       bucket=bucket,
-      fileNamePrefix=os.path.join(folder, description),
+      fileNamePrefix=(
+          (f"{(folder or '').strip('/')}/{description}")
+          if (folder or '').strip('/') else description
+      ),
       fileFormat=file_format,
       selectors=bands)
   task.start()

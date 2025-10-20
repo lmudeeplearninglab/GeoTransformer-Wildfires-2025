@@ -210,3 +210,5 @@ __marimo__/
 large_data/
 
 *.tfrecord
+*.tfrecord.gz
+exports/
