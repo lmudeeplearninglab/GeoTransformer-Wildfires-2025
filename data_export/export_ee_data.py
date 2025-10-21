@@ -238,7 +238,7 @@ def _export_dataset(
     fire_count = ee_utils.get_detection_count(
         detection,
         geometry=geometry,
-        sampling_scale=10 * sampling_scale,
+        sampling_scale=sampling_scale,
     )
     if fire_count > 0:
       samples = ee_utils.extract_samples(
