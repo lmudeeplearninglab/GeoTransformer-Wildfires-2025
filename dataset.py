@@ -26,6 +26,67 @@ import image_utils
 # from tensorflow.contrib import training as contrib_training
 
 
+def inspect_tfrecord_features(file_pattern, max_files=1):
+  """Inspects TFRecord files to find available features.
+  
+  Args:
+    file_pattern: Glob pattern for TFRecord files to inspect.
+    max_files: Maximum number of files to inspect (default: 1).
+    
+  Returns:
+    Set of feature names found in the TFRecord files.
+  """
+  import glob
+  files = glob.glob(file_pattern)
+  if not files:
+    raise ValueError(f'No files found matching pattern: {file_pattern}')
+  
+  feature_names = set()
+  for file_path in files[:max_files]:
+    dataset = tf.data.TFRecordDataset(file_path, compression_type='GZIP')
+    for raw_record in dataset.take(1):
+      example = tf.train.Example()
+      example.ParseFromString(raw_record.numpy())
+      feature_names.update(example.features.feature.keys())
+      break
+    if feature_names:
+      break
+  
+  return feature_names
+
+
+def filter_features_by_availability(
+    requested_features,
+    file_pattern,
+    verbose=True
+):
+  """Filters requested features to only those available in TFRecord files.
+  
+  Args:
+    requested_features: List or tuple of feature names requested.
+    file_pattern: Glob pattern for TFRecord files.
+    verbose: If True, prints information about missing features.
+    
+  Returns:
+    List of features that are actually available in the TFRecord files.
+  """
+  available_features = inspect_tfrecord_features(file_pattern)
+  requested_set = set(requested_features)
+  
+  missing_features = requested_set - available_features
+  if missing_features and verbose:
+    print(f"Warning: The following requested features are not in TFRecords: {missing_features}")
+    print(f"Available features: {available_features}")
+  
+  # Maintain original order
+  filtered_features = [f for f in requested_features if f in available_features]
+  
+  if verbose and filtered_features:
+    print(f"Using {len(filtered_features)} features: {filtered_features}")
+  
+  return filtered_features
+
+
 def get_features_dict(
     sample_size,
     features,
