@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-r"""Earth Engine helper functions.
+"""Earth Engine helper functions.
 
 Details on the Earth Engine Data Catalog can be found here:
 https://developers.google.com/earth-engine/datasets
@@ -306,3 +306,126 @@ def export_ml_datasets(
         kernel_size=kernel_size,
         sampling_scale=sampling_scale,
         num_samples_per_file=num_samples_per_file)
+
+
+def export_single_fire_dataset(
+    bucket,
+    folder,
+    start_date,
+    end_date,
+    geometry,
+    prefix = 'fire',
+    kernel_size = 128,
+    sampling_scale = 1000,
+    num_samples_per_file = 1000,
+    center_on_fire_centroid = False,
+):
+  """Exports a dataset for a single fire with one sample per day.
+  
+  Unlike export_ml_datasets which samples all fire pixels, this function
+  extracts one sample per day centered at either the geometric center of
+  the region or the centroid of fire pixels for that day.
+  
+  Args:
+    bucket: Google Cloud bucket
+    folder: Folder to which to export the TFRecords.
+    start_date: Start date for the EE data to export.
+    end_date: End date for the EE data to export.
+    geometry: EE geometry (typically a small region around the fire).
+    prefix: File name prefix to use.
+    kernel_size: Size of the exported tiles (square).
+    sampling_scale: Resolution at which to export the data (in meters).
+    num_samples_per_file: Approximate number of samples to save per TFRecord file.
+    center_on_fire_centroid: If True, center each sample on the fire centroid
+      for that day. If False, use the geometric center of the region.
+  """
+  
+  def _extract_single_centered_sample(
+      image,
+      detection,
+      center_point,
+      sampling_scale,
+  ):
+    """Extracts a single sample centered on the region or fire centroid."""
+    
+    # Sample at the center point
+    sample = image.sample(
+        region=center_point,
+        scale=sampling_scale,
+        numPixels=1,
+        geometries=True,
+        dropNulls=False
+    )
+    
+    return sample
+  
+  # Set up data sources
+  elevation = ee_utils.get_image(ee_utils.DataType.ELEVATION_SRTM)
+  population = ee_utils.get_image_collection(ee_utils.DataType.POPULATION)
+  population = population.filterDate(start_date, end_date).median().rename('population')
+  
+  projection = ee_utils.get_image_collection(ee_utils.DataType.WEATHER_GRIDMET)
+  projection = projection.first().select(
+      ee_utils.DATA_BANDS[ee_utils.DataType.WEATHER_GRIDMET][0]).projection()
+  resampling_scale = ee_utils.RESAMPLING_SCALE[ee_utils.DataType.WEATHER_GRIDMET]
+  
+  # Calculate days in range
+  num_days = int(ee.Date.difference(end_date, start_date, unit='days').getInfo())
+  all_days = list(range(num_days))
+  
+  window = 1
+  features = _get_all_feature_bands() + _get_all_response_bands()
+  
+  file_count = 0
+  feature_collection = ee.FeatureCollection([])
+  
+  for start_day in all_days:
+    window_start = start_date.advance(start_day, 'days')
+    time_slices = _get_time_slices(window_start, window, projection, resampling_scale)
+    
+    image_list = [elevation, population] + time_slices[:-1]
+    detection = time_slices[-1]
+    arrays = ee_utils.convert_features_to_arrays(image_list, kernel_size)
+    to_sample = detection.addBands(arrays)
+    
+    # Check if there's fire on this day
+    fire_count = ee_utils.get_detection_count(
+        detection,
+        geometry=geometry,
+        sampling_scale=sampling_scale,
+    )
+    
+    if fire_count > 0:
+      # Extract single centered sample
+      sample = _extract_single_centered_sample(
+          to_sample,
+          detection,
+          geometry,
+          sampling_scale,
+          center_on_fire_centroid,
+      )
+      feature_collection = feature_collection.merge(sample)
+      
+      # Export when we have enough samples
+      feature_collection, size_count = _verify_feature_collection(feature_collection)
+      if size_count >= num_samples_per_file:
+        ee_utils.export_feature_collection(
+            feature_collection,
+            description=prefix + '_{:03d}'.format(file_count),
+            bucket=bucket,
+            folder=folder,
+            bands=features,
+        )
+        file_count += 1
+        feature_collection = ee.FeatureCollection([])
+  
+  # Export remaining samples
+  feature_collection, size_count = _verify_feature_collection(feature_collection)
+  if size_count > 0:
+    ee_utils.export_feature_collection(
+        feature_collection,
+        description=prefix + '_{:03d}'.format(file_count),
+        bucket=bucket,
+        folder=folder,
+        bands=features,
+    )
