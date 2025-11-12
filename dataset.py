@@ -26,57 +26,86 @@ import image_utils
 # from tensorflow.contrib import training as contrib_training
 
 
-def inspect_tfrecord_features(file_pattern, max_files=1):
-  """Inspects TFRecord files to find available features.
+def inspect_tfrecord_features(file_pattern, max_files=3, max_records_per_file=10):
+  """Inspects TFRecord files to find consistently available features.
   
   Args:
     file_pattern: Glob pattern for TFRecord files to inspect.
-    max_files: Maximum number of files to inspect (default: 1).
+    max_files: Maximum number of files to inspect (default: 3).
+    max_records_per_file: Maximum records to check per file (default: 10).
     
   Returns:
-    Set of feature names found in the TFRecord files.
+    Set of feature names that are present in ALL inspected records.
   """
   import glob
   files = glob.glob(file_pattern)
   if not files:
     raise ValueError(f'No files found matching pattern: {file_pattern}')
   
-  feature_names = set()
+  # Start with None to track intersection across all records
+  common_features = None
+  records_checked = 0
+  
   for file_path in files[:max_files]:
     dataset = tf.data.TFRecordDataset(file_path, compression_type='GZIP')
-    for raw_record in dataset.take(1):
+    for raw_record in dataset.take(max_records_per_file):
       example = tf.train.Example()
       example.ParseFromString(raw_record.numpy())
-      feature_names.update(example.features.feature.keys())
-      break
-    if feature_names:
+      current_features = set(example.features.feature.keys())
+      
+      if common_features is None:
+        # First record - initialize with all features
+        common_features = current_features
+      else:
+        # Intersect with features from previous records
+        common_features = common_features.intersection(current_features)
+      
+      records_checked += 1
+      
+      # Early exit if no common features remain
+      if not common_features:
+        break
+    
+    if not common_features:
       break
   
-  return feature_names
+  if common_features is None:
+    return set()
+  
+  return common_features
 
 
 def filter_features_by_availability(
     requested_features,
     file_pattern,
-    verbose=True
+    verbose=True,
+    max_files=3,
+    max_records_per_file=10
 ):
-  """Filters requested features to only those available in TFRecord files.
+  """Filters requested features to only those consistently available in TFRecord files.
+  
+  This function inspects multiple records across multiple files to ensure that
+  only features present in ALL records are included. This prevents errors when
+  some records are missing certain features.
   
   Args:
     requested_features: List or tuple of feature names requested.
     file_pattern: Glob pattern for TFRecord files.
     verbose: If True, prints information about missing features.
+    max_files: Maximum number of files to inspect (default: 3).
+    max_records_per_file: Maximum records to check per file (default: 10).
     
   Returns:
-    List of features that are actually available in the TFRecord files.
+    List of features that are actually available in ALL inspected TFRecord files.
   """
-  available_features = inspect_tfrecord_features(file_pattern)
+  available_features = inspect_tfrecord_features(
+      file_pattern, max_files=max_files, max_records_per_file=max_records_per_file)
   requested_set = set(requested_features)
   
   missing_features = requested_set - available_features
   if missing_features and verbose:
-    print(f"Warning: The following requested features are not in TFRecords: {missing_features}")
-    print(f"Available features: {available_features}")
+    print(f"Warning: The following requested features are not consistently present in all TFRecords: {missing_features}")
+    print(f"Consistently available features: {sorted(available_features)}")
   
   # Maintain original order
   filtered_features = [f for f in requested_features if f in available_features]

@@ -135,7 +135,7 @@ def _get_time_slices(
       window_start.advance(-lag, 'day')).map(
           ee_utils.remove_mask).max().rename('PrevFireMask')
   fire = image_collections['fire'].filterDate(window_start, window_end).map(
-      ee_utils.remove_mask).max()
+      ee_utils.remove_mask).max().rename('FireMask')
   detection = fire.clamp(6, 7).subtract(6).rename('detection')
   return [drought, vegetation, weather, prev_fire, fire, detection]
 
@@ -205,8 +205,6 @@ def _export_dataset(
   elevation = ee_utils.get_image(ee_utils.DataType.ELEVATION_SRTM)
   end_date = start_date.advance(max(start_days), 'days')
   population = ee_utils.get_image_collection(ee_utils.DataType.POPULATION)
-  # Could also move to using the most recent population data for a given sample,
-  # which requires more EE logic.
   population = population.filterDate(start_date,
                                      end_date).median().rename('population')
   projection = ee_utils.get_image_collection(ee_utils.DataType.WEATHER_GRIDMET)
@@ -329,7 +327,7 @@ def export_single_fire_dataset(
   Args:
     bucket: Google Cloud bucket
     folder: Folder to which to export the TFRecords.
-    start_date: Start date for the EE data to export.
+    start_date: Starts date for the EE data to export.
     end_date: End date for the EE data to export.
     geometry: EE geometry (typically a small region around the fire).
     prefix: File name prefix to use.
@@ -342,7 +340,6 @@ def export_single_fire_dataset(
   
   def _extract_single_centered_sample(
       image,
-      detection,
       center_point,
       sampling_scale,
   ):
@@ -383,42 +380,39 @@ def export_single_fire_dataset(
     window_start = start_date.advance(start_day, 'days')
     time_slices = _get_time_slices(window_start, window, projection, resampling_scale)
     
-    image_list = [elevation, population] + time_slices[:-1]
-    detection = time_slices[-1]
+    image_list = [elevation, population] + time_slices  # Include detection
     arrays = ee_utils.convert_features_to_arrays(image_list, kernel_size)
-    to_sample = detection.addBands(arrays)
-    
-    # Check if there's fire on this day
-    fire_count = ee_utils.get_detection_count(
-        detection,
-        geometry=geometry,
-        sampling_scale=sampling_scale,
-    )
-    
-    if fire_count > 0:
-      # Extract single centered sample
-      sample = _extract_single_centered_sample(
-          to_sample,
-          detection,
-          geometry,
-          sampling_scale,
-          center_on_fire_centroid,
-      )
-      feature_collection = feature_collection.merge(sample)
+    to_sample = arrays
       
-      # Export when we have enough samples
-      feature_collection, size_count = _verify_feature_collection(feature_collection)
-      if size_count >= num_samples_per_file:
-        ee_utils.export_feature_collection(
-            feature_collection,
-            description=prefix + '_{:03d}'.format(file_count),
-            bucket=bucket,
-            folder=folder,
-            bands=features,
-        )
-        file_count += 1
-        feature_collection = ee.FeatureCollection([])
-  
+      # Check if there's fire on this day
+    #  fire_count = ee_utils.get_detection_count(
+    #      detection,
+    #     geometry=geometry,
+    #      sampling_scale=sampling_scale,
+    #  )
+      
+    #  if fire_count > 0:
+        # Extract single centered sample
+    sample = _extract_single_centered_sample(
+        to_sample,
+        geometry,
+        sampling_scale,
+    )
+    feature_collection = feature_collection.merge(sample)
+    
+    # Export when we have enough samples
+    feature_collection, size_count = _verify_feature_collection(feature_collection)
+    if size_count >= num_samples_per_file:
+      ee_utils.export_feature_collection(
+          feature_collection,
+          description=prefix + '_{:03d}'.format(file_count),
+          bucket=bucket,
+          folder=folder,
+          bands=features,
+      )
+      file_count += 1
+      feature_collection = ee.FeatureCollection([])
+
   # Export remaining samples
   feature_collection, size_count = _verify_feature_collection(feature_collection)
   if size_count > 0:
