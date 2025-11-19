@@ -89,9 +89,12 @@ class WindowAttention(tf.keras.layers.Layer):
         
         # zero initialization
         num_window_elements = (2*self.window_size[0] - 1) * (2*self.window_size[1] - 1)
-        self.relative_position_bias_table = self.add_weight('{}_attn_pos'.format(self.prefix),
-                                                            shape=(num_window_elements, self.num_heads),
-                                                            initializer=tf.initializers.Zeros(), trainable=True)
+        self.relative_position_bias_table = self.add_weight(
+            name='{}_attn_pos'.format(self.prefix),
+            shape=(num_window_elements, self.num_heads),
+            initializer=tf.initializers.Zeros(),
+            trainable=True,
+        )
         
         # Indices of relative positions
         coords_h = np.arange(self.window_size[0])
@@ -106,9 +109,10 @@ class WindowAttention(tf.keras.layers.Layer):
         relative_coords[:, :, 0] *= 2 * self.window_size[1] - 1
         relative_position_index = relative_coords.sum(-1)
         
-        # convert to the tf variable
-        self.relative_position_index = tf.Variable(
-            initial_value=tf.convert_to_tensor(relative_position_index), trainable=False, name='{}_attn_pos_ind'.format(self.prefix))
+        # Store relative position indices as a NumPy array; it will be converted
+        # to a Tensor on-the-fly where needed, avoiding tf.Variable creation
+        # inside tf.function traces.
+        self.relative_position_index = relative_position_index
         
         self.built = True
 

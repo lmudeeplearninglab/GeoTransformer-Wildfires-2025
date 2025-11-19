@@ -220,7 +220,5 @@ def create_model(
       l1_regularization=l1_regularization,
       l2_regularization=l2_regularization)(x)
   
-  x = tf.keras.layers.Flatten()(x)
-  
   model = tf.keras.Model(inputs=input_tensor, outputs=x)
   return model
