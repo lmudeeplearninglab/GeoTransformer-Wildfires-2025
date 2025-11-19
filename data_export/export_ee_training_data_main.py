@@ -17,6 +17,8 @@ r"""Main program to export training data for the wildfire ML project."""
 
 import json
 import os
+import sys
+from pathlib import Path
 
 from absl import app
 from absl import flags
@@ -24,7 +26,15 @@ from absl import logging
 from absl.testing import flagsaver
 import ee
 
-from data_export import export_ee_data
+# Handle imports when running directly vs as a module
+try:
+    from data_export import export_ee_data
+except ImportError:
+    # If running directly, add parent directory to path
+    parent_dir = Path(__file__).parent.parent
+    if str(parent_dir) not in sys.path:
+        sys.path.insert(0, str(parent_dir))
+    from data_export import export_ee_data
 
 
 FLAGS = flags.FLAGS

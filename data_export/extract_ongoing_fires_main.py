@@ -21,14 +21,25 @@ new TFRecords.
 """
 
 from typing import List, Text, Sequence
+import sys
+from pathlib import Path
 
 from absl import app
 from absl import flags
 import numpy as np
 import tensorflow as tf
 
-import constants
-import dataset
+# Handle imports when running directly vs as a module
+try:
+    import constants
+    import dataset
+except ImportError:
+    # If running directly, add parent directory to path
+    parent_dir = Path(__file__).parent.parent
+    if str(parent_dir) not in sys.path:
+        sys.path.insert(0, str(parent_dir))
+    import constants
+    import dataset
 
 FLAGS = flags.FLAGS
 

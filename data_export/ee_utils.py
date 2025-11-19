@@ -16,10 +16,12 @@
 """Library of Earth Engine utility functions."""
 
 import enum
+import json
 import math
 import os
 import random
-from typing import List, Text, Dict
+from pathlib import Path
+from typing import List, Text, Dict, Optional
 
 import ee
 
@@ -313,3 +315,149 @@ def split_days_into_train_eval_test(
   split_days['eval'] = days[-2 * num_eval:-num_eval]
   split_days['test'] = days[-num_eval:]
   return split_days
+
+
+def download_exports_from_gcs(
+    bucket_name: str,
+    folder: str,
+    destination: Path,
+    prefix: Optional[str] = None,
+):
+  """Downloads exported TFRecord files from Google Cloud Storage to local directory.
+
+  This function downloads files that were exported using export_feature_collection.
+  It attempts to use Earth Engine credentials or Application Default Credentials,
+  similar to the notebook's download_exports function.
+
+  Args:
+    bucket_name: Name of the GCS bucket.
+    folder: Folder path in the bucket (e.g., "eaton").
+    destination: Local directory path to download files to.
+    prefix: Optional file prefix to filter downloads (e.g., "eaton_sample").
+
+  Returns:
+    List of downloaded file paths.
+
+  Raises:
+    ImportError: If google-cloud-storage is not installed.
+    RuntimeError: If authentication fails.
+  """
+  try:
+    from google.cloud import storage
+    import google.auth
+    from google.auth.transport.requests import Request
+  except ImportError:
+    raise ImportError(
+        "google-cloud-storage is required for downloading files. "
+        "Install it with: pip install google-cloud-storage"
+    )
+
+  destination = Path(destination)
+  destination.mkdir(parents=True, exist_ok=True)
+
+  client = None
+  credentials = None
+  project = None
+
+  # Strategy 1: Try to use Earth Engine credentials directly
+  try:
+    ee_creds_path = os.path.expanduser('~/.config/earthengine/credentials')
+    if os.path.exists(ee_creds_path):
+      print("Attempting to use Earth Engine credentials...")
+      with open(ee_creds_path, 'r') as f:
+        ee_creds_data = json.load(f)
+      
+      # Try to create credentials from EE token
+      from google.oauth2.credentials import Credentials
+      if 'access_token' in ee_creds_data or 'refresh_token' in ee_creds_data:
+        try:
+          credentials = Credentials(
+              token=ee_creds_data.get('access_token'),
+              refresh_token=ee_creds_data.get('refresh_token'),
+              token_uri='https://oauth2.googleapis.com/token',
+              client_id=ee_creds_data.get('client_id'),
+              client_secret=ee_creds_data.get('client_secret'),
+              scopes=['https://www.googleapis.com/auth/cloud-platform']
+          )
+          if credentials.expired and credentials.refresh_token:
+            credentials.refresh(Request())
+          project = ee_creds_data.get('project_id') or ee_creds_data.get('project')
+        except Exception as e:
+          print(f"Could not use EE credentials directly: {e}")
+  except Exception as e:
+    print(f"Note: Could not read Earth Engine credentials: {e}")
+
+  # Strategy 2: Try Application Default Credentials
+  if not credentials:
+    try:
+      print("Attempting to use Application Default Credentials...")
+      credentials, project = google.auth.default(
+          scopes=['https://www.googleapis.com/auth/cloud-platform']
+      )
+      
+      # Refresh if needed
+      if not credentials.valid:
+        if credentials.expired and hasattr(credentials, 'refresh_token') and credentials.refresh_token:
+          credentials.refresh(Request())
+    except Exception as e:
+      print(f"Could not use Application Default Credentials: {e}")
+
+  # Strategy 3: Try to initialize client
+  if credentials:
+    try:
+      client = storage.Client(credentials=credentials, project=project)
+      print("✓ Successfully authenticated with Google Cloud Storage")
+    except Exception as e:
+      print(f"Warning: Could not use credentials: {e}")
+      client = None
+
+  if not client:
+    try:
+      print("Attempting to initialize client without explicit credentials...")
+      client = storage.Client()
+    except Exception as e:
+      error_msg = (
+          f"\n{'='*60}\n"
+          f"Could not authenticate with Google Cloud Storage.\n"
+          f"Error: {e}\n\n"
+          f"SOLUTIONS:\n"
+          f"{'='*60}\n"
+          f"Option 1 (Recommended): Install gcloud CLI\n"
+          f"  1. Download from: https://cloud.google.com/sdk/docs/install\n"
+          f"  2. Run in terminal: gcloud auth application-default login\n"
+          f"  3. Re-run this script\n\n"
+          f"Option 2: Use a Service Account\n"
+          f"  1. Create service account in Google Cloud Console\n"
+          f"  2. Download JSON key file\n"
+          f"  3. Set environment variable:\n"
+          f"     $env:GOOGLE_APPLICATION_CREDENTIALS=\"path/to/key.json\"\n"
+          f"  4. Re-run this script\n\n"
+          f"Option 3: Check if your Earth Engine account has GCS access\n"
+          f"  Your Earth Engine account needs permission to access the bucket:\n"
+          f"  {bucket_name}\n"
+          f"{'='*60}\n"
+      )
+      raise RuntimeError(error_msg) from e
+
+  bucket = client.bucket(bucket_name)
+  folder = str(folder).strip('/')
+  gcs_prefix = (folder + '/') if folder else ''
+
+  # Add prefix filter if provided
+  if prefix:
+    gcs_prefix = f"{gcs_prefix}{prefix}"
+
+  blobs = list(bucket.list_blobs(prefix=gcs_prefix))
+  downloaded_files = []
+
+  print(f"Found {len(blobs)} files under gs://{bucket_name}/{gcs_prefix}")
+  for blob in blobs:
+    # Only download .tfrecord.gz files
+    if blob.name.endswith('.tfrecord.gz') or blob.name.endswith('.tfrecord'):
+      target = destination / Path(blob.name).name
+      print(f"Downloading {blob.name} -> {target}")
+      blob.download_to_filename(target)
+      downloaded_files.append(target)
+
+  print(f"Downloaded {len(downloaded_files)} files to {destination}")
+  return downloaded_files

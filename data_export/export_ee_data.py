@@ -23,10 +23,20 @@ Earth Engine library.
 """
 
 from typing import List, Text, Tuple
+import sys
+from pathlib import Path
 
 import ee
 
-from data_export import ee_utils
+# Handle imports when running directly vs as a module
+try:
+    from data_export import ee_utils
+except ImportError:
+    # If running directly, add parent directory to path
+    parent_dir = Path(__file__).parent.parent
+    if str(parent_dir) not in sys.path:
+        sys.path.insert(0, str(parent_dir))
+    from data_export import ee_utils
 
 
 def _get_all_feature_bands():
