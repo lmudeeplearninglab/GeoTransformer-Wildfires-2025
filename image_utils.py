@@ -13,12 +13,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Library of image transformation utils."""
+"""Library of image transformation and visualization utils."""
 
-from typing import List, Optional, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 import numpy as np
 import tensorflow as tf
+import matplotlib.pyplot as plt
+from matplotlib import colors
+
+import constants
 
 
 def _tensor_to_list_of_channel_tensors(img):
@@ -399,3 +403,159 @@ def downsample_output_image(img,
       indices=tf.convert_to_tensor(indices_array, dtype=tf.int32),
       updates=updates)
   return tf.cast(output, dtype=tf.float32)
+
+
+def _to_numpy(arr):
+  """Converts a TF tensor or array-like object to a NumPy array."""
+  if arr is None:
+    return None
+  if tf.is_tensor(arr):
+    return arr.numpy()
+  return np.asarray(arr)
+
+
+def plot_dataset(
+    n_rows: int,
+    inputs,
+    labels = None,
+    predictions = None,
+    feature_names: Optional[Sequence[str]] = None,
+    titles: Optional[Sequence[str]] = None,
+    single: bool = False,
+):
+  """Plots input features, labels, and predictions for wildfire tiles.
+
+  This function is designed to be the single source of truth for how we
+  visualize the dataset so that channel ordering stays consistent across
+  notebooks.
+
+  Args:
+    n_rows: If `single` is False, the maximum number of samples (rows) to
+      display. If `single` is True, this is interpreted as the sample index to
+      visualize.
+    inputs: 4D tensor/array with shape `[batch, H, W, C]`.
+    labels: Optional 4D tensor/array `[batch, H, W, 1]` with FireMask labels.
+    predictions: Optional 4D tensor/array `[batch, H, W, 1]` with predicted
+      FireMask.
+    feature_names: Optional list of feature keys corresponding to the input
+      channels (e.g. `constants.INPUT_FEATURES` or a filtered subset in the
+      same order). Used to derive human-readable titles and to detect
+      mask-like channels such as `PrevFireMask`.
+    titles: Optional list of column titles. If provided, its length must equal
+      `num_input_channels + (1 if labels is not None else 0) +
+      (1 if predictions is not None else 0)`. If omitted, default titles are
+      derived from `feature_names` and `constants.FEATURE_TITLES`.
+    single: If True, visualize a single sample (using `n_rows` as the sample
+      index). If False, visualize up to `n_rows` samples starting from index 0.
+  """
+  inputs_np = _to_numpy(inputs)
+  labels_np = _to_numpy(labels)
+  preds_np = _to_numpy(predictions)
+
+  if inputs_np.ndim == 3:
+    # Add batch dimension if a single example is provided.
+    inputs_np = inputs_np[np.newaxis, ...]
+  if labels_np is not None and labels_np.ndim == 3:
+    labels_np = labels_np[np.newaxis, ...]
+  if preds_np is not None and preds_np.ndim == 3:
+    preds_np = preds_np[np.newaxis, ...]
+
+  if inputs_np.ndim != 4:
+    raise ValueError(
+        f'Expected `inputs` with rank 4 (batch, H, W, C), got shape '
+        f'{inputs_np.shape}')
+
+  batch_size, _, _, num_channels = inputs_np.shape
+  has_labels = labels_np is not None
+  has_preds = preds_np is not None
+
+  num_cols = num_channels + (1 if has_labels else 0) + (1 if has_preds else 0)
+
+  # Build default titles if none are provided.
+  if titles is None:
+    col_titles = []
+    for idx in range(num_channels):
+      if feature_names and idx < len(feature_names):
+        key = feature_names[idx]
+        # Use readable titles when available, otherwise fall back to key.
+        title = constants.FEATURE_TITLES.get(key, key)
+      else:
+        title = f'Feature {idx + 1}'
+      col_titles.append(title)
+    if has_labels:
+      col_titles.append(constants.FEATURE_TITLES.get('FireMask', 'FireMask'))
+    if has_preds:
+      col_titles.append('Predict mask')
+  else:
+    col_titles = list(titles)
+    if len(col_titles) != num_cols:
+      raise ValueError(
+          'Length of `titles` must be equal to the number of columns '
+          f'({num_cols}), got {len(col_titles)}.')
+
+  # Color maps.
+  fire_cmap = colors.ListedColormap(['black', 'silver', 'orangered'])
+  fire_bounds = [-1, -0.1, 0.001, 1]
+  fire_norm = colors.BoundaryNorm(fire_bounds, fire_cmap.N)
+
+  if single:
+    # Interpret n_rows as the sample index to visualize.
+    sample_idx = int(n_rows)
+    if not (0 <= sample_idx < batch_size):
+      raise IndexError(
+          f'sample index {sample_idx} out of range for batch size {batch_size}')
+    row_indices = [sample_idx]
+  else:
+    num_rows = min(int(n_rows), batch_size)
+    row_indices = list(range(num_rows))
+
+  num_rows_plot = len(row_indices)
+  if num_rows_plot == 0:
+    raise ValueError('No rows to plot (batch size is zero).')
+
+  fig_height = 6.5 * max(1.0, num_rows_plot / 5.0)
+  plt.figure(figsize=(15, fig_height))
+
+  # Determine which input channels should be rendered as masks.
+  mask_like_features = {'PrevFireMask', 'FireMask'}
+
+  for row_idx, sample_idx in enumerate(row_indices):
+    for col_idx in range(num_cols):
+      ax = plt.subplot(num_rows_plot, num_cols,
+                       row_idx * num_cols + col_idx + 1)
+
+      if row_idx == 0:
+        ax.set_title(col_titles[col_idx], fontsize=13)
+
+      if col_idx < num_channels:
+        # Input features.
+        is_mask_like = False
+        if feature_names and col_idx < len(feature_names):
+          if feature_names[col_idx] in mask_like_features:
+            is_mask_like = True
+
+        if is_mask_like:
+          ax.imshow(inputs_np[sample_idx, :, :, col_idx],
+                    cmap=fire_cmap,
+                    norm=fire_norm)
+        else:
+          ax.imshow(inputs_np[sample_idx, :, :, col_idx], cmap='viridis')
+      else:
+        # Labels and predictions.
+        label_col = num_channels if has_labels else None
+        pred_col = (num_channels + (1 if has_labels else 0)
+                    if has_preds else None)
+
+        if has_labels and col_idx == label_col:
+          ax.imshow(labels_np[sample_idx, :, :, 0],
+                    cmap=fire_cmap,
+                    norm=fire_norm)
+        elif has_preds and col_idx == pred_col:
+          ax.imshow(preds_np[sample_idx, :, :, 0],
+                    cmap=fire_cmap,
+                    norm=fire_norm)
+
+      ax.axis('off')
+
+  plt.tight_layout()
+  return plt.gcf()

@@ -33,7 +33,7 @@ OUTPUT_FEATURES = ('FireMask',)
 DATA_STATS = _IMMUTABLEDICT({
     # 0.1 percentile, 99.9 percentile
     'elevation': (0., 3141., 657., 649.),
-    # Pressure
+    # Palmer Drought Severity Index (PDSI) – drought index.
     # 0.1 percentile, 99.9 percentile
     'pdsi': (-6.1, 7.9, 0., 2.7),
     'NDVI': (-9821., 9996., 5158., 2467.),  # min, max
@@ -68,4 +68,22 @@ DATA_STATS = _IMMUTABLEDICT({
     # We don't want to normalize the FireMasks.
     'PrevFireMask': (-1., 1., 0., 1.),
     'FireMask': (-1., 1., 0., 1.)
+})
+
+
+# Human‑readable titles for features, used primarily in plotting utilities.
+FEATURE_TITLES = _IMMUTABLEDICT({
+    'elevation': 'Elevation',
+    'pdsi': 'Drought (PDSI)',
+    'NDVI': 'Vegetation (NDVI)',
+    'pr': 'Precipitation',
+    'sph': 'Specific humidity',
+    'th': 'Wind direction',
+    'tmmn': 'Min temperature',
+    'tmmx': 'Max temperature',
+    'vs': 'Wind speed',
+    'erc': 'Energy release component',
+    'population': 'Population density',
+    'PrevFireMask': 'Previous fire mask',
+    'FireMask': 'Fire mask',
 })

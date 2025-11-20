@@ -204,9 +204,20 @@ def _export_dataset(
 
   elevation = ee_utils.get_image(ee_utils.DataType.ELEVATION_SRTM)
   end_date = start_date.advance(max(start_days), 'days')
-  population = ee_utils.get_image_collection(ee_utils.DataType.POPULATION)
-  population = population.filterDate(start_date,
-                                     end_date).median().rename('population')
+
+  # Use population data within the requested date range when available.
+  # If no images exist in that range, fall back to the most recent
+  # population image in the collection.
+  population_collection = ee_utils.get_image_collection(
+      ee_utils.DataType.POPULATION)
+  population_in_range = population_collection.filterDate(start_date, end_date)
+  population = ee.Image(
+      ee.Algorithms.If(
+          population_in_range.size().gt(0),
+          population_in_range.median(),
+          population_collection.sort('system:time_start', False).first(),
+      )).rename('population')
+
   projection = ee_utils.get_image_collection(ee_utils.DataType.WEATHER_GRIDMET)
   projection = projection.first().select(
       ee_utils.DATA_BANDS[ee_utils.DataType.WEATHER_GRIDMET][0]).projection()
