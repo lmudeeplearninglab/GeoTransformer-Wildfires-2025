@@ -74,7 +74,7 @@ DATA_BANDS = {
 # The time unit is 'days'.
 DATA_TIME_SAMPLING = {
     DataType.VEGETATION_VIIRS: 8,
-    DataType.DROUGHT_GRIDMET: 5,
+    DataType.DROUGHT_GRIDMET: 10,  # Increased from 5 to 10 to ensure coverage despite gaps
     DataType.WEATHER_ERA5: 0.25,
     DataType.WEATHER_GRIDMET: 2,
     DataType.FIRE_MODIS: 1,

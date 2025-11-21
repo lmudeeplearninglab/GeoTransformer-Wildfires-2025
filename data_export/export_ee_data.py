@@ -130,13 +130,19 @@ def _get_time_slices(
       window_start.advance(-lag - time_sampling['weather'], 'day'),
       window_start.advance(-lag, 'day')).median().reproject(
           projection.atScale(resampling_scale)).resample('bicubic')
-  prev_fire = image_collections['fire'].filterDate(
+
+  # Previous fire: aggregate over the look‑back window and convert to a 0/1 mask.
+  prev_fire_raw = image_collections['fire'].filterDate(
       window_start.advance(-lag - time_sampling['fire'], 'day'),
-      window_start.advance(-lag, 'day')).map(
-          ee_utils.remove_mask).max().rename('PrevFireMask')
+      window_start.advance(-lag, 'day')).map(ee_utils.remove_mask).max()
+  prev_fire = prev_fire_raw.clamp(6, 7).subtract(6).rename('PrevFireMask')
+
+  # Current fire: raw FireMask and corresponding 0/1 detection mask.
   fire = image_collections['fire'].filterDate(window_start, window_end).map(
       ee_utils.remove_mask).max().rename('FireMask')
   detection = fire.clamp(6, 7).subtract(6).rename('detection')
+
+  # Order is important for callers that unpack this list.
   return [drought, vegetation, weather, prev_fire, fire, detection]
 
 
@@ -239,8 +245,19 @@ def _export_dataset(
     window_start = start_date.advance(start_day, 'days')
     time_slices = _get_time_slices(window_start, window, projection,
                                    resampling_scale)
-    image_list = [elevation, population] + time_slices[:-1]
-    detection = time_slices[-1]
+    # time_slices: [drought, vegetation, weather, prev_fire, fire_raw, detection]
+    drought, vegetation, weather, prev_fire, _fire_raw, detection = time_slices
+    # Use the 0/1 detection mask as the exported FireMask label.
+    firemask_binary = detection.rename('FireMask')
+    image_list = [
+        elevation,
+        population,
+        drought,
+        vegetation,
+        weather,
+        prev_fire,
+        firemask_binary,
+    ]
     arrays = ee_utils.convert_features_to_arrays(image_list, kernel_size)
     to_sample = detection.addBands(arrays)
 
@@ -369,8 +386,19 @@ def export_single_fire_dataset(
   
   # Set up data sources
   elevation = ee_utils.get_image(ee_utils.DataType.ELEVATION_SRTM)
-  population = ee_utils.get_image_collection(ee_utils.DataType.POPULATION)
-  population = population.filterDate(start_date, end_date).median().rename('population')
+
+  # Use population data within the requested date range when available.
+  # If no images exist in that range, fall back to the most recent population
+  # image in the collection (mirrors the multi‑fire export logic).
+  population_collection = ee_utils.get_image_collection(
+      ee_utils.DataType.POPULATION)
+  population_in_range = population_collection.filterDate(start_date, end_date)
+  population = ee.Image(
+      ee.Algorithms.If(
+          population_in_range.size().gt(0),
+          population_in_range.median(),
+          population_collection.sort('system:time_start', False).first(),
+      )).rename('population')
   
   projection = ee_utils.get_image_collection(ee_utils.DataType.WEATHER_GRIDMET)
   projection = projection.first().select(
@@ -390,8 +418,19 @@ def export_single_fire_dataset(
   for start_day in all_days:
     window_start = start_date.advance(start_day, 'days')
     time_slices = _get_time_slices(window_start, window, projection, resampling_scale)
-    
-    image_list = [elevation, population] + time_slices  # Include detection
+    # time_slices: [drought, vegetation, weather, prev_fire, fire_raw, detection]
+    drought, vegetation, weather, prev_fire, _fire_raw, detection = time_slices
+    # Use the 0/1 detection mask as the exported FireMask label.
+    firemask_binary = detection.rename('FireMask')
+    image_list = [
+        elevation,
+        population,
+        drought,
+        vegetation,
+        weather,
+        prev_fire,
+        firemask_binary,
+    ]
     arrays = ee_utils.convert_features_to_arrays(image_list, kernel_size)
     to_sample = arrays
       

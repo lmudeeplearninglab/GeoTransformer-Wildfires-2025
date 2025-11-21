@@ -35,15 +35,17 @@ def inspect_tfrecord_features(file_pattern, max_files=3, max_records_per_file=10
     max_records_per_file: Maximum records to check per file (default: 10).
     
   Returns:
-    Set of feature names that are present in ALL inspected records.
+    Tuple of (common_features, feature_counts, records_checked)
   """
   import glob
+  from collections import Counter
   files = glob.glob(file_pattern)
   if not files:
     raise ValueError(f'No files found matching pattern: {file_pattern}')
   
   # Start with None to track intersection across all records
   common_features = None
+  feature_counts = Counter()
   records_checked = 0
   
   for file_path in files[:max_files]:
@@ -53,6 +55,8 @@ def inspect_tfrecord_features(file_pattern, max_files=3, max_records_per_file=10
       example.ParseFromString(raw_record.numpy())
       current_features = set(example.features.feature.keys())
       
+      feature_counts.update(current_features)
+      
       if common_features is None:
         # First record - initialize with all features
         common_features = current_features
@@ -61,18 +65,11 @@ def inspect_tfrecord_features(file_pattern, max_files=3, max_records_per_file=10
         common_features = common_features.intersection(current_features)
       
       records_checked += 1
-      
-      # Early exit if no common features remain
-      if not common_features:
-        break
-    
-    if not common_features:
-      break
   
   if common_features is None:
-    return set()
+    return set(), Counter(), 0
   
-  return common_features
+  return common_features, feature_counts, records_checked
 
 
 def filter_features_by_availability(
@@ -98,13 +95,21 @@ def filter_features_by_availability(
   Returns:
     List of features that are actually available in ALL inspected TFRecord files.
   """
-  available_features = inspect_tfrecord_features(
+  available_features, feature_counts, records_checked = inspect_tfrecord_features(
       file_pattern, max_files=max_files, max_records_per_file=max_records_per_file)
   requested_set = set(requested_features)
   
   missing_features = requested_set - available_features
   if missing_features and verbose:
     print(f"Warning: The following requested features are not consistently present in all TFRecords: {missing_features}")
+    
+    if records_checked > 0:
+      print("Feature availability breakdown (missing features):")
+      for feature in sorted(missing_features):
+        count = feature_counts[feature]
+        ratio = count / records_checked
+        print(f"  - {feature}: {ratio:.1%} ({count}/{records_checked} samples)")
+            
     print(f"Consistently available features: {sorted(available_features)}")
   
   # Maintain original order
